@@ -2,8 +2,7 @@
 #
 # texttable - module for creating simple ASCII tables
 # Copyright (C) 2003-2011 Gerome Fournier <jef(at)foutaise.org>
-#
-# This library is free software; you can redistribute it and/or
+# # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
 # License as published by the Free Software Foundation; either
 # version 2.1 of the License, or (at your option) any later version.
@@ -43,6 +42,21 @@ Example:
                     ["efghijk", 67.5434, .654,  89.6,  12800000000000000000000.00023],
                     ["lmn",     5e-78,   5e-78, 89.4,  .000000000000128],
                     ["opqrstu", .023,    5e+78, 92.,   12800000000000000000000]])
+    print table.draw() + "\\n"
+
+    table = Texttable()
+    table.set_asmarkdown()
+    table.set_cols_dtype(['t',  # text
+                          'f',  # float (decimal)
+                          'e',  # float (exponent)
+                          'i',  # integer
+                          'a']) # automatic
+    table.set_cols_align(["l", "r", "r", "r", "l"])
+    table.add_rows([['text',    "float", "exp", "int", "auto"],
+                    ["abcd",    "67",    654,   89,    128.001],
+                    ["efghijk", 67.5434, .654,  89.6,  12800000000000000000000.00023],
+                    ["lmn",     5e-78,   5e-78, 89.4,  .000000000000128],
+                    ["opqrstu", .023,    5e+78, 92.,   12800000000000000000000]])
     print table.draw()
 
 Result:
@@ -65,6 +79,13 @@ Result:
     efgh   67.543   6.540e-01   90    1.280e+22
     ijkl   0.000    5.000e-78   89    0.000
     mnop   0.023    5.000e+78   92    1.280e+22
+
+    |  text   | float  |    exp    | int |   auto    |
+    |:--------|-------:|----------:|----:|:---------:|
+    | abcd    | 67.000 | 6.540e+02 |  89 | 128.001   |
+    | efghijk | 67.543 | 6.540e-01 |  90 | 1.280e+22 |
+    | lmn     |  0.000 | 5.000e-78 |  89 | 0.000     |
+    | opqrstu |  0.023 | 5.000e+78 |  92 | 1.280e+22 |
 """
 
 __all__ = ["Texttable", "ArraySizeError"]
@@ -151,10 +172,15 @@ def get_color_string(type, string):
 
 class Texttable:
 
-    BORDER = 1
-    HEADER = 1 << 1
-    HLINES = 1 << 2
-    VLINES = 1 << 3
+    TOPBORDER = 1
+    BOTTOMBORDER = 1 << 1
+    LEFTBORDER = 1 << 2
+    RIGHTBORDER = 1 << 3
+    HEADER = 1 << 4
+    HLINES = 1 << 5
+    VLINES = 1 << 6
+    ALIGNSYM = 1 << 7
+    BORDER = TOPBORDER | BOTTOMBORDER | LEFTBORDER | RIGHTBORDER
 
     def __init__(self, max_width=80):
         """Constructor
@@ -170,7 +196,7 @@ class Texttable:
 
         self._deco = Texttable.VLINES | Texttable.HLINES | Texttable.BORDER | \
             Texttable.HEADER
-        self.set_chars(['-', '|', '+', '='])
+        self.set_chars(['-', '|', '+', '=', ':'])
         self.reset()
 
     def reset(self):
@@ -184,23 +210,33 @@ class Texttable:
         self._header = []
         self._rows = []
 
+    def set_asmarkdown(self):
+        """ Set the table deco and chars as used in markdown
+        """
+        self._deco = Texttable.VLINES | Texttable.HEADER | Texttable.ALIGNSYM | \
+            Texttable.LEFTBORDER | Texttable.RIGHTBORDER
+        self.set_chars(['-', '|', '|', '-', ':'])
+
     def set_chars(self, array):
         """Set the characters used to draw lines between rows and columns
 
-        - the array should contain 4 fields:
+        - the array should contain 5 fields:
 
             [horizontal, vertical, corner, header]
 
         - default is set to:
 
-            ['-', '|', '+', '=']
+            ['-', '|', '+', '=', ':']
         """
 
-        if len(array) != 4:
-            raise ArraySizeError, "array should contain 4 characters"
+        if len(array) != 5:
+            raise ArraySizeError, "array should contain 5 characters"
         array = [ x[:1] for x in [ str(s) for s in array ] ]
-        (self._char_horiz, self._char_vert,
-            self._char_corner, self._char_header) = array
+        (self._char_horiz,
+         self._char_vert,
+         self._char_corner,
+         self._char_header,
+         self._char_align) = array
 
     def set_deco(self, deco):
         """Set the table decoration
@@ -211,6 +247,11 @@ class Texttable:
             Texttable.HEADER: Horizontal line below the header
             Texttable.HLINES: Horizontal lines between rows
             Texttable.VLINES: Vertical lines between columns
+            Texttable.TOPBORDER: Top line of the border
+            Texttable.LEFTBORDER: Left line of the border
+            Texttable.RIGHTBORDER: Right line of the border
+            Texttable.BOTTOMBORDER: Bottom line of the border
+            Texttable.ALIGHSYM: Align symbol for header line
 
            All of them are enabled by default
 
@@ -350,7 +391,7 @@ class Texttable:
         self._compute_cols_width()
         self._check_align()
         out = ""
-        if self._has_border():
+        if self._has_tborder():
             out += self._hline()
         if self._header:
             out += self._draw_line(self._header, isheader=True)
@@ -362,7 +403,7 @@ class Texttable:
             out += self._draw_line(row)
             if self._has_hlines() and length < len(self._rows):
                 out += self._hline()
-        if self._has_border():
+        if self._has_bborder():
             out += self._hline()
         return out[:-1]
 
@@ -422,11 +463,35 @@ class Texttable:
 
         return self._deco & Texttable.HLINES > 0
 
-    def _has_border(self):
-        """Return a boolean, if border is required or not
+    def _has_tborder(self):
+        """Return a boolean, if topborder is required or not
         """
 
-        return self._deco & Texttable.BORDER > 0
+        return self._deco & Texttable.TOPBORDER > 0
+
+    def _has_lborder(self):
+        """Return a boolean, if leftborder is required or not
+        """
+
+        return self._deco & Texttable.LEFTBORDER > 0
+
+    def _has_rborder(self):
+        """Return a boolean, if rightborder is required or not
+        """
+
+        return self._deco & Texttable.RIGHTBORDER > 0
+
+    def _has_bborder(self):
+        """Return a boolean, if bottomborder is required or not
+        """
+
+        return self._deco & Texttable.BOTTOMBORDER > 0
+
+    def _has_alignsym(self):
+        """ Return a boolean, if alignsym is required or not
+        """
+
+        return self._deco & Texttable.ALIGNSYM > 0
 
     def _has_header(self):
         """Return a boolean, if header line is required or not
@@ -456,16 +521,31 @@ class Texttable:
         if (is_header):
             horiz = self._char_header
         # compute cell separator
-        s = "%s%s%s" % (horiz, [horiz, self._char_corner][self._has_vlines()],
-            horiz)
         # build the line
-        l = string.join([horiz * n for n in self._width], s)
+        l = ''
+        for i, n in enumerate(self._width):
+            l += horiz * n
+            if i < len(self._width) - 1:
+                l += "%s%s%s" % (
+                    [horiz, self._char_align]
+                    [self._has_alignsym() and (self._align[i] in 'rc')],
+                    [horiz, self._char_corner]
+                    [self._has_vlines()],
+                    [horiz, self._char_align]
+                    [self._has_alignsym() and (self._align[i + 1] in 'lc')])
+
         # add border if needed
-        if self._has_border():
-            l = "%s%s%s%s%s\n" % (self._char_corner, horiz, l, horiz,
-                self._char_corner)
-        else:
-            l += "\n"
+        if self._has_lborder():
+            l = "%s%s%s" % (self._char_corner,
+                            [horiz, self._char_align]
+                            [self._has_alignsym() and (self._align[0] in 'lc')],
+                            l)
+        if self._has_rborder():
+            l = "%s%s%s" % (l,
+                            [horiz, self._char_align]
+                            [self._has_alignsym() and (self._align[-1] in 'lc')],
+                            self._char_corner)
+        l += "\n"
         return l
 
     def _len_cell(self, cell):
@@ -537,7 +617,7 @@ class Texttable:
         space = " "
         out  = ""
         for i in range(len(line[0])):
-            if self._has_border():
+            if self._has_lborder():
                 out += "%s " % self._char_vert
             length = 0
             for cell, width, align in zip(line, self._width, self._align):
@@ -571,7 +651,7 @@ class Texttable:
                     out += "%s " % (cell_line + fill * space)
                 if length < len(line):
                     out += "%s " % [space, self._char_vert][self._has_vlines()]
-            out += "%s\n" % ['', self._char_vert][self._has_border()]
+            out += "%s\n" % ['', self._char_vert][self._has_rborder()]
         return out
 
     def _splitit(self, line, isheader):
@@ -634,6 +714,21 @@ if __name__ == '__main__':
 
     table = Texttable()
     table.set_deco(Texttable.HEADER)
+    table.set_cols_dtype(['t',  # text
+                          'f',  # float (decimal)
+                          'e',  # float (exponent)
+                          'i',  # integer
+                          'a']) # automatic
+    table.set_cols_align(["l", "r", "r", "r", "l"])
+    table.add_rows([['text',    "float", "exp", "int", "auto"],
+                    ["abcd",    "67",    654,   89,    128.001],
+                    ["efghijk", 67.5434, .654,  89.6,  12800000000000000000000.00023],
+                    ["lmn",     5e-78,   5e-78, 89.4,  .000000000000128],
+                    ["opqrstu", .023,    5e+78, 92.,   12800000000000000000000]])
+    print table.draw() + "\n"
+
+    table = Texttable()
+    table.set_asmarkdown()
     table.set_cols_dtype(['t',  # text
                           'f',  # float (decimal)
                           'e',  # float (exponent)
