@@ -50,4 +50,4 @@ For easy printing of ascii tables within python
 
 # Result:
 
-![texttable results](http://imgur.com/ZEtEVHL)
+![texttable results](http://i.imgur.com/ZEtEVHL.png)
