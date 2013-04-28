@@ -543,7 +543,7 @@ class Texttable:
         if self._has_rborder():
             l = "%s%s%s" % (l,
                             [horiz, self._char_align]
-                            [self._has_alignsym() and (self._align[-1] in 'lc')],
+                            [self._has_alignsym() and (self._align[-1] in 'rc')],
                             self._char_corner)
         l += "\n"
         return l
